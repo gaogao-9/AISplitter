@@ -10,13 +10,9 @@
 (function(window, undef) {
 	"use strict";
 	
-	// main
-	function AISplitter(uri) {
-		this._path = "";
-		
-		this.path = uri;
-	}
+	window.AISplitter = AISplitter;
 	
+	// setter,getter
 	AISplitter.prototype = {
 		set path(value){
 			if(typeof(value)!=="string") return;
@@ -27,16 +23,99 @@
 		}
 	};
 	
-	AISplitter.prototype.read = function(url, type) {
-		var frames = new Frames(url, type);
-		return frames;
+	// methods(prototype)
+	AISplitter.prototype.read = read;        // (type:String):void
+	AISplitter.prototype.read = readAsAPNG;  // ():void
+	AISplitter.prototype.read = readAsXJPEG; // ():void
+	AISplitter.prototype.on = on;            // (type:String,callback:Function):void
+	AISplitter.prototype.off = off;          // (type:String[,callback:Function]):void
+	AISplitter.prototype.trigger = trigger;  // (type:String[,arg:Object]):void
+	
+	// static parameters
+	AISplitter.APNG  = "APNG";
+	AISplitter.XJPEG = "XJPEG";
+	
+	// main
+	function AISplitter(uri){
+		this._path = "";
+		this.events = {
+			load:  [],
+			error: []
+		};
+		
+		this.path = uri;
+	}
+	
+	function read(type){
+		switch(type){
+			case "APNG":
+				_urlToBinary.call(this,this._parseAPNG);
+				break;
+			case "XJPEG":
+				_urlToBinary.call(this,this._parseXJPEG);
+				break;
+			default:
+				this.trigger("error", {error:"Don't support type"});
+				break;
+		}
 	};
 	
-	window.AISplitter = AISplitter;
+	function readAsAPNG(){
+		return read.call(this, AISplitter.APNG);
+	}
 	
+	function readAsXJPEG(){
+		return read.call(this, AISplitter.XJPEG);
+	}
 	
-	//Frames Object
-	function Frames(url, type) {
+	function on(type,callback){
+		switch(type){
+			case "load":
+			case "error":
+				this.events[type].push(callback);
+				break;
+			default:
+				throw new Error("Don't exist '"+type+"' event");
+		}
+	}
+	
+	function off(type,callback){
+		switch(type){
+			case "load":
+			case "error":
+				if(typeof(callback)!=="function"){
+					this.events[type].length = 0;
+					break;
+				}
+				var events = this.events[type];
+				for(var i=events.length;i--;){
+					if(events[i]!==callback) continue;
+					events.splice(i,1);
+				}
+				break;
+			default:
+				throw new Error("Don't exist '"+type+"' event");
+		}
+	}
+	
+	function trigger(type,arg){
+		switch(type){
+			case "load":
+			case "error":
+				arg = arg || {};
+				arg.error = arg.error || null;
+				break;
+			default:
+				throw new Error("Don't exist '"+type+"' event");
+		}
+		var events = this.events[type];
+		for(var i=events.length;i--;){
+			if(events[i].call(this,obj)===false) break;
+		}
+	}
+	
+	// Frame Object
+	function Frame() {
 		this.width = 0;
 		this.height = 0;
 		this.frames = [];
@@ -51,55 +130,12 @@
 		this._urlToFrames(url, type);
 	}
 	
-	Frames.prototype.on = function(ev, func) {
-		if(ev === "load" || ev === "error" || ev === "progress") {
-			this["_on" + ev].push(func);
-		} else {
-			throw new Error("Don't exist '"+ev+"' event");
-		}
-	};
-	
-	Frames.prototype.off = function(ev, func) {
-		if(ev === "load" || ev === "error" || ev === "progress") {
-			var evFunc = this["_on" + ev];
-
-			if(typeof func === "function") {
-				for(var i = 0, l = evFunc.length; i < l; ++i) {
-					if(evFunc[i] === func)
-						evFunc.splice(i, 1);
-				}
-			} else if(func === undef) {
-				evFunc.splice(0, evFunc.length);
-			}
-		} else {
-			throw new Error("Don't exist '"+ev+"' event");
-		}
-	};
-	
-	Frames.prototype.trigger = function(ev, obj) {
-		if(ev === "load" || ev === "error" || ev === "progress") {
-			obj = obj || [];
-			obj.frames = this.frames;
-
-			obj.number = obj.number !== undef ? obj.number : null;
-			obj.frame = obj.frame || null;
-			obj.error = obj.error || null;
-
-			var evFunc = this["_on" + ev];
-			for(var i = 0, l = evFunc.length; i < l; ++i) {
-				evFunc[i].call(this, obj);
-			}
-		} else {
-			throw new Error("Don't exist '"+ev+"' event");
-		}
-	};
-	
 	Frames.prototype._loadend = function() {
 		this.loaded = true;
 		this.trigger("load");
 	};
 	
-	Frames.prototype._urlToFrames = (function() {
+	Frames.prototype._urlToBinary = (function() {
 
 		// XHR 2
 		var useResponseType, useResponseTypeBlob;
