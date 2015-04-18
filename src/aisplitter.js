@@ -9,19 +9,32 @@
 
 (function(window, undef) {
 	"use strict";
-
+	
 	// main
-	function AISplitter() {
+	function AISplitter(uri) {
+		this._path = "";
+		
+		this.path = uri;
 	}
-
+	
+	AISplitter.prototype = {
+		set path(value){
+			if(typeof(value)!=="string") return;
+			this._path = value.toString();
+		},
+		get path(){
+			return this._path;
+		}
+	};
+	
 	AISplitter.prototype.read = function(url, type) {
 		var frames = new Frames(url, type);
 		return frames;
 	};
-
+	
 	window.AISplitter = AISplitter;
-
-
+	
+	
 	//Frames Object
 	function Frames(url, type) {
 		this.width = 0;
@@ -37,7 +50,7 @@
 
 		this._urlToFrames(url, type);
 	}
-
+	
 	Frames.prototype.on = function(ev, func) {
 		if(ev === "load" || ev === "error" || ev === "progress") {
 			this["_on" + ev].push(func);
@@ -45,7 +58,7 @@
 			throw new Error("Don't exist '"+ev+"' event");
 		}
 	};
-
+	
 	Frames.prototype.off = function(ev, func) {
 		if(ev === "load" || ev === "error" || ev === "progress") {
 			var evFunc = this["_on" + ev];
@@ -62,7 +75,7 @@
 			throw new Error("Don't exist '"+ev+"' event");
 		}
 	};
-
+	
 	Frames.prototype.trigger = function(ev, obj) {
 		if(ev === "load" || ev === "error" || ev === "progress") {
 			obj = obj || [];
@@ -80,12 +93,12 @@
 			throw new Error("Don't exist '"+ev+"' event");
 		}
 	};
-
+	
 	Frames.prototype._loadend = function() {
 		this.loaded = true;
 		this.trigger("load");
 	};
-
+	
 	Frames.prototype._urlToFrames = (function() {
 
 		// XHR 2
@@ -93,18 +106,18 @@
 
 		// XHR 1
 		var useXUserDefined;
-
+		
 		// Modernizr https://github.com/Modernizr/Modernizr/blob/924c7611c170ef2dc502582e5079507aff61e388/src/testXhrType.js
 		(function() {
 			var xhr = new XMLHttpRequest();
 			useResponseType = (xhr.responseType !== undef);
 			useXUserDefined = (xhr.overrideMimeType !== undef && !useResponseType);
-
+			
 			if(!useResponseType) {
 				useResponseTypeBlob = false;
 				return;
 			}
-
+			
 			xhr.open("get", "/", true);
 			try {
 				xhr.responseType = "blob";
@@ -114,7 +127,7 @@
 			}
 			useResponseTypeBlob = (xhr.response !== undef && xhr.responseType === "blob");
 		})();
-
+		
 		// IE9 http://miskun.com/javascript/internet-explorer-and-binary-files-data-access/
 		var isMSIE9 = navigator.userAgent.match(/msie [9.]/i);
 
@@ -129,7 +142,7 @@
 				document.body.appendChild(script);
 			});
 		}
-
+		
 		return function(url, type) {
 			var _this = this;
 			var xhr = new XMLHttpRequest();
@@ -140,7 +153,7 @@
 			} else if(useXUserDefined) { // old Safari
 				xhr.overrideMimeType('text/plain; charset=x-user-defined');
 			}
-
+			
 			xhr.onreadystatechange = function(e) {
 				if (this.readyState == 4 && this.status == 200) {
 
@@ -498,4 +511,4 @@
 	})();
 	
 
-})(this);
+})((this || 0).self || global);
