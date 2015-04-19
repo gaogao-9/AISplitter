@@ -13,7 +13,7 @@
 	// methods(prototype)
 	APNGMovie.prototype.loadHeader       = loadHeader;       // ():void
 	APNGMovie.prototype.moveToFirstFrame = moveToFirstFrame; // ():boolean
-	APNGMovie.prototype.getNextFrame     = getNextFrame;     // ():AISplitter.Frame Object
+	APNGMovie.prototype.getNextFrame     = getNextFrame;     // ():AISplitter.APNGFrame Object
 	
 	// main
 	function APNGMovie(bin){

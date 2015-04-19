@@ -12,7 +12,7 @@
 	
 	// methods(prototype)
 	XJPEGMovie.prototype.loadHeader   = loadHeader;   // ():void
-	XJPEGMovie.prototype.getNextFrame = getNextFrame; // ():AISplitter.Frame Object
+	XJPEGMovie.prototype.getNextFrame = getNextFrame; // ():AISplitter.XJPEGFrame Object
 	
 	// main
 	function XJPEGMovie(bin){
