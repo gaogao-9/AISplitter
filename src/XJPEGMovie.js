@@ -11,8 +11,9 @@
 	AISplitter._extend(AISplitter.Movie,AISplitter.XJPEGMovie);
 	
 	// methods(prototype)
-	XJPEGMovie.prototype.loadHeader   = loadHeader;   // ():void
-	XJPEGMovie.prototype.getNextFrame = getNextFrame; // ():AISplitter.XJPEGFrame Object
+	XJPEGMovie.prototype.loadHeader       = loadHeader;       // ():void
+	XJPEGMovie.prototype.moveToFirstFrame = moveToFirstFrame; // ():boolean
+	XJPEGMovie.prototype.getNextFrame     = getNextFrame;     // ():AISplitter.XJPEGFrame Object
 	
 	// main
 	function XJPEGMovie(bin){
@@ -25,118 +26,26 @@
 		Movie.call(this,bin);
 	}
 	
+	// utility
+	var AVI_HEADER = "AVI ";
+	
+	function loadHeader(){
+		var marker = String.fromCharCode(0xff);
+		var SOI = marker + String.fromCharCode(0xd8);
+		var EOI = marker + String.fromCharCode(0xd9);
+		
+		this._binary
+		var data = imageStr.match(new RegExp(SOI+"[\\s\\S]+?"+EOI, "g"));
+		
+		if(!("length" in data)) {
+			throw new Error("Can't read JPEG Binary String");
+			return;
+		}
+	}
+	
 	function getNextFrame(){
 		if(!this._isSuccess) return null;
 	}
-	
-	Frames.prototype._loadend = function() {
-		this.trigger("load");
-	};
-	
-	Frames.prototype._parseAPNG = function(imageStr) {
-
-		if (imageStr.substr(0, 8) !== PNG_SIGNATURE) {
-			this.trigger("error", {error:"This file is not PNG"});
-			return;
-		}
-
-		var headerData, preData = "", postData = "", isAnimated = false;
-
-		var off = 8, frame = null, length, type, data;
-		do {
-			length = readDWord(imageStr.substr(off, 4));
-			type = imageStr.substr(off + 4, 4);
-
-			switch (type) {
-				case "IHDR":
-					data = imageStr.substr(off + 8, length);
-					headerData = data;
-					this.width = readDWord(data.substr(0, 4));
-					this.height = readDWord(data.substr(4, 4));
-					break;
-				case "acTL":
-					isAnimated = true;
-					this.numPlays = readDWord(imageStr.substr(off + 12, 4));
-					break;
-				case "fcTL":
-					if (frame) this.frames.push(frame);
-					data = imageStr.substr(off + 8, length);
-					frame = {};
-					frame.width = readDWord(data.substr(4, 4));
-					frame.height = readDWord(data.substr(8, 4));
-					frame.left = readDWord(data.substr(12, 4));
-					frame.top = readDWord(data.substr(16, 4));
-					var delayN = readWord(data.substr(20, 2));
-					var delayD = readWord(data.substr(22, 2));
-					if (delayD === 0) delayD = 100;
-					frame.delay = 1000 * delayN / delayD;
-					// see http://mxr.mozilla.org/mozilla/source/gfx/src/shared/gfxImageFrame.cpp#343
-					if (frame.delay <= 10) frame.delay = 100;
-					this.playTime += frame.delay;
-					frame.disposeOp = data.charCodeAt(24);
-					frame.blendOp = data.charCodeAt(25);
-					frame.dataParts = [];
-					break;
-				case "fdAT":
-					if (frame) frame.dataParts.push(imageStr.substr(off + 12, length - 4));
-					break;
-				case "IDAT":
-					if (frame) frame.dataParts.push(imageStr.substr(off + 8, length));
-					break;
-				case "IEND":
-					postData = imageStr.substr(off, length + 12);
-					break;
-				default:
-					preData += imageStr.substr(off, length + 12);
-			}
-			off += length + 12;
-		} while (type !== "IEND" && off < imageStr.length);
-		if (frame) this.frames.push(frame);
-
-		frame = null;
-
-		if (!isAnimated) {
-			this.trigger("error", {error:"Non-animated PNG"});
-			return;
-		}
-
-		// make Image
-		var loadedImages = 0, _this = this;
-		for (var i = 0, l = this.frames.length; i < l; ++i) {
-			var img = new Image();
-			frame = this.frames[i];
-			frame.img = img;
-
-			img.onload = onload(i, frame);
-			img.onerror = onerror;
-
-			var db = new DataBuilder();
-			db.append(PNG_SIGNATURE);
-			headerData = writeDWord(frame.width) + writeDWord(frame.height) + headerData.substr(8);
-			db.append(writeChunk("IHDR", headerData));
-			db.append(preData);
-			for (var j = 0; j < frame.dataParts.length; ++j)
-				db.append(writeChunk("IDAT", frame.dataParts[j]));
-			db.append(postData);
-			img.src = db.getUrl("image/png");
-			delete frame.dataParts;
-		}
-
-		function onload(num, frame) {
-			return function() {
-				++loadedImages;
-
-				_this.trigger("progress", {number:num, frame:frame});
-				if (loadedImages === _this.frames.length) { // Load End
-					_this._loadend();
-				}
-			};
-		}
-
-		function onerror() {
-			_this.trigger("error", {error:"Image creation error"});
-		}
-	};
 
 	Frames.prototype._parseXJPEG = function(imageStr) {
 
@@ -164,25 +73,29 @@
 			_this.playTime = 0;
 			return mSecParFrame;
 		})();
-
-		var SOFReg = (function() {
-			var SOFv = [], v = 0xc0;
-			while(v <= 0xcf) {
-				if(v !== 0xc4 && v !== 0xc8 && v !== 0xcc)
-					SOFv.push(String.fromCharCode(v));
-				++v;
-			}
-			return new RegExp(marker+"["+SOFv.join("")+"]");
-		})();
-
+		
+		var SOFReg = new RegExp("\u00ff\u005b\u00c0\u00c1\u00c2\u00c3\u00c5\u00c6\u00c7\u00c9\u00ca\u00cb\u00cd\u00ce\u00cf\u005d");
+		/*
+			// generator
+			var SOFReg = (function() {
+				var SOFv = [], v = 0xc0;
+				while(v <= 0xcf) {
+					if(v !== 0xc4 && v !== 0xc8 && v !== 0xcc)
+						SOFv.push(String.fromCharCode(v));
+					++v;
+				}
+				return new RegExp(marker+"["+SOFv.join("")+"]");
+			})();
+		*/
+		
 		for(var i = 0, l=data.length; i<l; ++i) {
-
+			
 			var frame = {};
 			var start = data[i].search(SOFReg);
-
+			
 			frame.height = readWord(data[i].substr(start + 5, 2));
 			frame.width = readWord(data[i].substr(start + 7, 2));
-
+			
 			if(i === 0) {
 				this.height = frame.height;
 				this.width = frame.width;
@@ -191,20 +104,20 @@
 				frame.top = (this.height - frame.height) / 2;
 				frame.left = (this.width - frame.width) / 2;
 			}
-
+			
 			if(mSecParFrame !== null) {
 				frame.delay = mSecParFrame;
 				this.playTime += mSecParFrame;
 			}
-
+			
 			this.frames.push(frame);
 		}
-
+		
 		if(data.length !== this.frames.length) {
 			this.trigger("error", {error:"Shotage JPEG SOF data"});
 			return;
 		}
-
+		
 		// make image
 		var loadedImages = 0;
 		for (var i = 0, l=this.frames.length; i < l; ++i) {
@@ -235,11 +148,6 @@
 			_this.trigger("error", {error:"Image creation error"});
 		}
 	};
-	
-	// utility
-	var AVI_HEADER = "AVI ";
-	// "\x89PNG\x0d\x0a\x1a\x0a"
-	var PNG_SIGNATURE = String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
 	
 	function readDWord(data) {
 		var x = 0;
